@@ -2,16 +2,14 @@ const mongoose = require('mongoose');
 
 const connectDB = async () => {
   try {
-    // Force IPv4 by using 127.0.0.1 instead of localhost
-    const mongoURI = 'mongodb://127.0.0.1:27017/venkan213';
+    const mongoURI = process.env.DB_URL || 'mongodb://127.0.0.1:27017/venkan213';
     console.log('Attempting to connect to MongoDB:', mongoURI);
-    
+
     const conn = await mongoose.connect(mongoURI, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
       serverSelectionTimeoutMS: 30000,
-      family: 4, // Force IPv4
-      directConnection: true,
+      family: 4, // Still okay for IPv4
       maxPoolSize: 10,
       minPoolSize: 1
     });
