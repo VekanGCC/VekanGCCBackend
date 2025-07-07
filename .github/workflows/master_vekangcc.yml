@@ -28,16 +28,15 @@ jobs:
           npm install
           npm test -- --passWithNoTests
 
-      - name: Zip app contents (flattened structure)
+      - name: Zip app contents
         run: |
-          cd ..
-          zip -r release.zip VekanGCCBackend/* VekanGCCBackend/.* -x "VekanGCCBackend/.git/*"
+          zip -r release.zip . -x ".git/*" "node_modules/*"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: node-app
-          path: ../release.zip
+          path: release.zip
 
   deploy:
     runs-on: ubuntu-latest
