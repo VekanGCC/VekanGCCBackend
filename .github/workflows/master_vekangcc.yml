@@ -9,9 +9,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend  # 👈 this is critical
 
     steps:
       - uses: actions/checkout@v4
@@ -28,7 +25,7 @@ jobs:
           npm test -- --passWithNoTests
 
       - name: Zip artifact
-        run: zip -r ../release.zip ./*
+        run: zip -r release.zip ./*
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
