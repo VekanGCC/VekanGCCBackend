@@ -440,7 +440,9 @@ const sendTokenResponse = (user, statusCode, res, message) => {
         approvalStatus: user.approvalStatus,
         rejectionReason: user.rejectionReason,
         organizationId: user.organizationId,
-        organizationRole: user.organizationRole
+        organizationRole: user.organizationRole,
+        registrationStep: user.registrationStep,
+        isRegistrationComplete: user.isRegistrationComplete
       }
     };
     console.log('Response data:', { ...response, token: '***', refreshToken: '***' });

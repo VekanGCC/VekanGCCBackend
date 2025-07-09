@@ -6,7 +6,7 @@ const ErrorResponse = require('../utils/errorResponse');
 // @route   GET /api/skills
 // @access  Public
 exports.getSkills = asyncHandler(async (req, res, next) => {
-  const skills = await AdminSkill.find({ isActive: true })
+  const skills = await AdminSkill.find()
     .select('-__v')
     .sort('name');
 

@@ -55,6 +55,13 @@ const userSchema = new mongoose.Schema({
     min: [1, 'Number of requirements must be at least 1']
   },
   
+  // Payment Terms
+  paymentTerms: {
+    type: String,
+    enum: ['net_15', 'net_30', 'net_45', 'net_60', 'net_90'],
+    default: 'net_30'
+  },
+  
   // Business Information
   businessInfo: {
     companyName: String,

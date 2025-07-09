@@ -8,6 +8,11 @@ const UserBankDetailsSchema = new mongoose.Schema({
   bankName: { type: String, required: true },
   branchName: { type: String, required: true },
   bankCity: { type: String, required: true },
+  paymentTerms: { 
+    type: String, 
+    enum: ['net_15', 'net_30', 'net_45', 'net_60', 'net_90'],
+    default: 'net_30' 
+  },
   isVerified: { type: Boolean, default: false },
 }, { timestamps: true });
 

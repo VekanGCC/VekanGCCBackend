@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const {
   saveStep,
+  sendOTP,
   getRegistrationStatus,
   uploadDocuments,
   getVendorProfile,
@@ -42,6 +43,7 @@ router.get('/', protect, async (req, res, next) => {
 
 // Registration routes
 router.post('/create', saveStep);
+router.post('/send-otp', sendOTP);
 router.get('/registration/status', protect, getRegistrationStatus);
 
 // Document upload

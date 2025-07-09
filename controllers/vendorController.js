@@ -45,6 +45,38 @@ const getRegistrationStatus = asyncHandler(async (req, res, next) => {
 // @desc    Save registration step (Unified, like client)
 // @route   POST /api/vendor/create
 // @access  Public
+// @desc    Send OTP to vendor email
+// @route   POST /api/vendor/send-otp
+// @access  Public
+const sendOTP = asyncHandler(async (req, res, next) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return next(new ErrorResponse('Please provide an email address', 400));
+  }
+
+  // Find user by email
+  const user = await User.findOne({ email: email.toLowerCase() });
+  if (!user) {
+    return next(new ErrorResponse('No user found with this email', 404));
+  }
+
+  // Generate and store OTP in user table
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  user.otp = otp;
+  user.otpExpiry = Date.now() + 10 * 60 * 1000; // 10 minutes
+  await user.save();
+
+  // Send OTP via email (currently just logging)
+  console.log(`🔧 VendorController: OTP for ${email}: ${otp}`);
+
+  res.status(200).json({
+    success: true,
+    message: 'OTP sent successfully',
+    otp: otp // Include OTP in response for development
+  });
+});
+
 const saveStep = asyncHandler(async (req, res, next) => {
   const { step, data } = req.body;
   let user;
@@ -133,7 +165,8 @@ const saveStep = asyncHandler(async (req, res, next) => {
           email: user.email,
           registrationStep: user.registrationStep,
           organizationId: organization._id
-        }
+        },
+        otp: otp // Include OTP in response for development
       });
     } catch (error) {
       console.error('🔧 VendorController: Error during vendor creation:', error);
@@ -178,6 +211,7 @@ const saveStep = asyncHandler(async (req, res, next) => {
         console.log('Vendor Step 3 - Received data:', data);
         console.log('Vendor Step 3 - Address data:', data.address);
         console.log('Vendor Step 3 - Bank data:', data.bankDetails);
+        console.log('Vendor Step 3 - Payment terms from bankDetails:', data.bankDetails?.paymentTerms);
         
         const addressResult = await UserAddress.findOneAndUpdate(
           { userId: user._id },
@@ -192,6 +226,14 @@ const saveStep = asyncHandler(async (req, res, next) => {
           { upsert: true, new: true }
         );
         console.log('Vendor Step 3 - Bank details saved:', bankResult);
+        
+        // Also save payment terms to User model for easy access
+        if (data.bankDetails && data.bankDetails.paymentTerms) {
+          user.paymentTerms = data.bankDetails.paymentTerms;
+          console.log('Vendor Step 3 - Payment terms saved to User model:', data.bankDetails.paymentTerms);
+        } else {
+          console.log('Vendor Step 3 - No payment terms found in bankDetails:', data.bankDetails);
+        }
         break;
       case 4:
         // Statutory and compliance details
@@ -213,7 +255,19 @@ const saveStep = asyncHandler(async (req, res, next) => {
         break;
     }
     user.registrationStep = Math.max(user.registrationStep, step);
+    console.log('Vendor Step 3 - User before save:', {
+      id: user._id,
+      email: user.email,
+      paymentTerms: user.paymentTerms,
+      registrationStep: user.registrationStep
+    });
     await user.save();
+    console.log('Vendor Step 3 - User after save:', {
+      id: user._id,
+      email: user.email,
+      paymentTerms: user.paymentTerms,
+      registrationStep: user.registrationStep
+    });
     res.status(200).json({
       success: true,
       message: `Step ${step} completed successfully`,
@@ -357,6 +411,7 @@ const getVendorStats = asyncHandler(async (req, res, next) => {
 
 module.exports = {
   saveStep,
+  sendOTP,
   getRegistrationStatus,
   uploadDocuments,
   getVendorProfile,

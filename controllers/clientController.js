@@ -13,6 +13,8 @@ const {
 } = require('../validation/clientValidation');
 const ApiResponse = require('../models/ApiResponse');
 
+
+
 // @desc    Get client registration status
 // @route   GET /api/client/registration-status
 // @access  Private (Client only)
@@ -294,7 +296,8 @@ const sendOTP = asyncHandler(async (req, res, next) => {
 
   res.status(200).json({
     success: true,
-    message: 'OTP sent successfully'
+    message: 'OTP sent successfully',
+    otp: otp // Include OTP in response for development
   });
 });
 
@@ -406,7 +409,8 @@ const saveStep = asyncHandler(async (req, res, next) => {
       data: {
         email: user.email,
         registrationStep: user.registrationStep
-      }
+      },
+      otp: otp // Include OTP in response for development
     });
   } else if (step === 2) {
     // Step 2: Verify OTP
@@ -461,12 +465,25 @@ const saveStep = asyncHandler(async (req, res, next) => {
     // Update user data based on step
     switch (step) {
       case 3:
-        // Address information
-        await UserAddress.findOneAndUpdate(
+        // Address and Payment Terms
+        console.log('Client Step 3 - Received data:', data);
+        console.log('Client Step 3 - Address data:', data.address);
+        console.log('Client Step 3 - Payment terms:', data.paymentTerms);
+        
+        const addressResult = await UserAddress.findOneAndUpdate(
           { userId: user._id },
           { ...data.address, userId: user._id },
           { upsert: true, new: true }
         );
+        console.log('Client Step 3 - Address saved:', addressResult);
+        
+        // Save payment terms directly to User model
+        if (data.paymentTerms) {
+          user.paymentTerms = data.paymentTerms;
+          console.log('Client Step 3 - Payment terms saved to User model:', data.paymentTerms);
+        } else {
+          console.log('Client Step 3 - No payment terms found in data');
+        }
         break;
       case 4:
         // Statutory and compliance details
@@ -490,7 +507,19 @@ const saveStep = asyncHandler(async (req, res, next) => {
     }
 
     user.registrationStep = Math.max(user.registrationStep, step);
+    console.log('Client Step 3 - User before save:', {
+      id: user._id,
+      email: user.email,
+      paymentTerms: user.paymentTerms,
+      registrationStep: user.registrationStep
+    });
     await user.save();
+    console.log('Client Step 3 - User after save:', {
+      id: user._id,
+      email: user.email,
+      paymentTerms: user.paymentTerms,
+      registrationStep: user.registrationStep
+    });
 
     res.status(200).json({
       success: true,

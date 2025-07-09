@@ -87,8 +87,8 @@ const requirementSchema = new mongoose.Schema({
   
   status: {
     type: String,
-    enum: ['draft', 'open', 'in_progress', 'on_hold', 'completed', 'cancelled'],
-    default: 'draft'
+    enum: ['draft', 'open', 'in_progress', 'on_hold', 'completed', 'cancelled', 'active', 'inactive'],
+    default: 'active'
   },
   
   priority: {

@@ -52,14 +52,11 @@ const poSchema = new mongoose.Schema({
   paymentTerms: {
     type: String,
     required: [true, 'Payment terms are required'],
-    enum: ['net_15', 'net_30', 'net_45', 'net_60', 'immediate', 'custom'],
+    enum: ['net_15', 'net_30', 'net_45', 'net_60', 'net_90'],
     default: 'net_30'
   },
   
-  customPaymentTerms: {
-    type: String,
-    maxlength: [200, 'Custom payment terms cannot be more than 200 characters']
-  },
+
   
   status: {
     type: String,
@@ -164,9 +161,6 @@ poSchema.virtual('statusDisplay').get(function() {
 
 // Virtual for payment terms display
 poSchema.virtual('paymentTermsDisplay').get(function() {
-  if (this.paymentTerms === 'custom' && this.customPaymentTerms) {
-    return this.customPaymentTerms;
-  }
   return this.paymentTerms.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 });
 

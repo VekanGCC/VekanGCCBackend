@@ -10,7 +10,8 @@ const {
   verifyEmail,
   verifyPhone,
   resendVerification,
-  getCurrentUser
+  getCurrentUser,
+  updateRegistrationStep
 } = require('../controllers/authController');
 const { protect } = require('../middleware/auth');
 const verifyToken = require('../middleware/jwt.middleware');
