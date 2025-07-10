@@ -12,7 +12,10 @@ const {
   deleteApplication,
   getApplicationCountsForRequirements,
   getApplicationCountsForResources,
-  getVendorApplicationsByResource
+  getVendorApplicationsByResource,
+  getActiveApplicationsCountForResource,
+  getActiveApplicationsCountForRequirement,
+  getApplicationStatusMapping
 } = require('../controllers/applicationController');
 const { protect, authorize } = require('../middleware/auth');
 
@@ -32,6 +35,13 @@ router.get('/client', authorize('client'), getClientApplications);
 // Application counts route
 router.get('/counts/requirements', getApplicationCountsForRequirements);
 router.get('/counts/resources', getApplicationCountsForResources);
+
+// Active applications count routes
+router.get('/active/resource/:resourceId', getActiveApplicationsCountForResource);
+router.get('/active/requirement/:requirementId', getActiveApplicationsCountForRequirement);
+
+// Status mapping route
+router.get('/status-mapping', getApplicationStatusMapping);
 
 router.route('/:id')
   .get(getApplication)

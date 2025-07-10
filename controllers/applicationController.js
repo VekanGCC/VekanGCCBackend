@@ -9,6 +9,12 @@ const ErrorResponse = require('../utils/errorResponse');
 const ApiResponse = require('../models/ApiResponse');
 const { createNotification } = require('./notificationController');
 const User = require('../models/User');
+const { 
+  getActiveApplicationsQuery, 
+  getActiveStatuses, 
+  getInactiveStatuses,
+  getStatusCategory 
+} = require('../utils/applicationStatusMapping');
 
 // @desc    Get all applications
 // @route   GET /api/applications
@@ -30,7 +36,16 @@ const getApplications = asyncHandler(async (req, res, next) => {
   let query = {};
 
   if (status) {
-    query.status = status;
+    // Handle both single status and comma-separated statuses for OR logic
+    if (Array.isArray(status)) {
+      query.status = { $in: status };
+    } else if (typeof status === 'string' && status.includes(',')) {
+      // Split comma-separated statuses
+      const statusArray = status.split(',').map(s => s.trim());
+      query.status = { $in: statusArray };
+    } else {
+      query.status = status;
+    }
   }
 
   if (requirementId) {
@@ -137,7 +152,16 @@ const getVendorApplications = asyncHandler(async (req, res, next) => {
   }
 
   if (status) {
-    query.status = status;
+    // Handle both single status and comma-separated statuses for OR logic
+    if (Array.isArray(status)) {
+      query.status = { $in: status };
+    } else if (typeof status === 'string' && status.includes(',')) {
+      // Split comma-separated statuses
+      const statusArray = status.split(',').map(s => s.trim());
+      query.status = { $in: statusArray };
+    } else {
+      query.status = status;
+    }
   }
 
   // Execute query with pagination - OPTIMIZED
@@ -205,7 +229,16 @@ const getClientApplications = asyncHandler(async (req, res, next) => {
   }
 
   if (status) {
-    query.status = status;
+    // Handle both single status and comma-separated statuses for OR logic
+    if (Array.isArray(status)) {
+      query.status = { $in: status };
+    } else if (typeof status === 'string' && status.includes(',')) {
+      // Split comma-separated statuses
+      const statusArray = status.split(',').map(s => s.trim());
+      query.status = { $in: statusArray };
+    } else {
+      query.status = status;
+    }
   }
 
   // Filter by specific requirement if provided
@@ -459,6 +492,12 @@ const updateApplicationStatus = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('Status is required', 400));
   }
 
+  // Validate that the status is a valid application status
+  const validStatuses = [...getActiveStatuses(), ...getInactiveStatuses()];
+  if (!validStatuses.includes(status)) {
+    return next(new ErrorResponse(`Invalid status. Valid statuses are: ${validStatuses.join(', ')}`, 400));
+  }
+
   let application = await Application.findById(req.params.id);
 
   if (!application) {
@@ -493,7 +532,7 @@ const updateApplicationStatus = asyncHandler(async (req, res, next) => {
   }
   // Client can update status in their process flow
   else if (isClient && isRequirementOwner) {
-    const clientAllowedStatuses = ['shortlisted', 'interview', 'accepted', 'offer_created'];
+    const clientAllowedStatuses = ['shortlisted', 'interview', 'accepted', 'offer_created', 'rejected'];
     hasPermission = clientAllowedStatuses.includes(status) && 
                    (currentStatus === 'applied' || clientAllowedStatuses.includes(currentStatus));
   }
@@ -632,8 +671,16 @@ const updateApplicationStatus = asyncHandler(async (req, res, next) => {
     }
   }
 
+  // Get status category for response
+  const statusCategory = getStatusCategory(finalStatus);
+
   res.status(200).json(
-    ApiResponse.success(application, 'Application status updated successfully')
+    ApiResponse.success({
+      application,
+      statusCategory,
+      previousStatus,
+      newStatus: finalStatus
+    }, 'Application status updated successfully')
   );
 });
 
@@ -991,6 +1038,139 @@ const getApplicationCountsForResources = asyncHandler(async (req, res, next) => 
   );
 });
 
+// @desc    Get active applications count for a resource
+// @route   GET /api/applications/active/resource/:resourceId
+// @access  Private
+const getActiveApplicationsCountForResource = asyncHandler(async (req, res, next) => {
+  const { resourceId } = req.params;
+
+  // Build query for active applications only
+  let query = { 
+    resource: resourceId,
+    ...getActiveApplicationsQuery() // Use the status mapping utility
+  };
+
+  // For vendors, ensure they can only check their own resources
+  if (req.user.userType === 'vendor') {
+    if (req.user.organizationId) {
+      // Check if resource belongs to vendor's organization
+      const resource = await Resource.findOne({ 
+        _id: resourceId,
+        organizationId: req.user.organizationId 
+      });
+      if (!resource) {
+        return next(new ErrorResponse('Resource not found or access denied', 404));
+      }
+    } else {
+      // Fallback to user-based ownership
+      const resource = await Resource.findOne({ 
+        _id: resourceId,
+        createdBy: req.user.id 
+      });
+      if (!resource) {
+        return next(new ErrorResponse('Resource not found or access denied', 404));
+      }
+    }
+  }
+
+  // For clients, ensure they can only check applications for their requirements
+  if (req.user.userType === 'client') {
+    if (req.user.organizationId) {
+      // Get requirements that belong to the client's organization
+      const clientRequirements = await Requirement.find({ 
+        organizationId: req.user.organizationId
+      }).select('_id').lean();
+      const clientRequirementIds = clientRequirements.map(req => req._id);
+      query.requirement = { $in: clientRequirementIds };
+    } else {
+      // Fallback to requirement-based filtering for clients without organization
+      const clientRequirements = await Requirement.find({ createdBy: req.user.id }).select('_id').lean();
+      const clientRequirementIds = clientRequirements.map(req => req._id);
+      query.requirement = { $in: clientRequirementIds };
+    }
+  }
+
+  const count = await Application.countDocuments(query);
+
+  res.status(200).json(
+    ApiResponse.success({ count }, 'Active applications count retrieved successfully')
+  );
+});
+
+// @desc    Get active applications count for a requirement
+// @route   GET /api/applications/active/requirement/:requirementId
+// @access  Private
+const getActiveApplicationsCountForRequirement = asyncHandler(async (req, res, next) => {
+  const { requirementId } = req.params;
+
+  // Build query for active applications only
+  let query = { 
+    requirement: requirementId,
+    ...getActiveApplicationsQuery() // Use the status mapping utility
+  };
+
+  // For clients, ensure they can only check their own requirements
+  if (req.user.userType === 'client') {
+    if (req.user.organizationId) {
+      // Check if requirement belongs to client's organization
+      const requirement = await Requirement.findOne({ 
+        _id: requirementId,
+        organizationId: req.user.organizationId 
+      });
+      if (!requirement) {
+        return next(new ErrorResponse('Requirement not found or access denied', 404));
+      }
+    } else {
+      // Fallback to user-based ownership
+      const requirement = await Requirement.findOne({ 
+        _id: requirementId,
+        createdBy: req.user.id 
+      });
+      if (!requirement) {
+        return next(new ErrorResponse('Requirement not found or access denied', 404));
+      }
+    }
+  }
+
+  // For vendors, ensure they can only check applications for their resources
+  if (req.user.userType === 'vendor') {
+    if (req.user.organizationId) {
+      // Get resources that belong to the vendor's organization
+      const vendorResources = await Resource.find({ 
+        organizationId: req.user.organizationId
+      }).select('_id').lean();
+      const vendorResourceIds = vendorResources.map(res => res._id);
+      query.resource = { $in: vendorResourceIds };
+    } else {
+      // Fallback to resource-based filtering for vendors without organization
+      const vendorResources = await Resource.find({ createdBy: req.user.id }).select('_id').lean();
+      const vendorResourceIds = vendorResources.map(res => res._id);
+      query.resource = { $in: vendorResourceIds };
+    }
+  }
+
+  const count = await Application.countDocuments(query);
+
+  res.status(200).json(
+    ApiResponse.success({ count }, 'Active applications count retrieved successfully')
+  );
+});
+
+// @desc    Get application status mapping information
+// @route   GET /api/applications/status-mapping
+// @access  Private
+const getApplicationStatusMapping = asyncHandler(async (req, res, next) => {
+  const statusMapping = {
+    active: getActiveStatuses(),
+    inactive: getInactiveStatuses(),
+    all: [...getActiveStatuses(), ...getInactiveStatuses()]
+  };
+
+  res.status(200).json(
+    ApiResponse.success(statusMapping, 'Application status mapping retrieved successfully')
+  );
+});
+
 // @desc    Get vendor applications filtered by resource ID
 // @route   GET /api/applications/vendor/resource/:resourceId
 // @access  Private (Vendor only)
@@ -1032,7 +1212,12 @@ const getVendorApplicationsByResource = asyncHandler(async (req, res, next) => {
   let query = { resource: resourceId };
 
   if (status) {
-    query.status = status;
+    // Handle both single status and array of statuses for OR logic
+    if (Array.isArray(status)) {
+      query.status = { $in: status };
+    } else {
+      query.status = status;
+    }
   }
 
   // Execute query with pagination
@@ -1074,5 +1259,8 @@ module.exports = {
   deleteApplication,
   getApplicationCountsForRequirements,
   getApplicationCountsForResources,
-  getVendorApplicationsByResource
+  getVendorApplicationsByResource,
+  getActiveApplicationsCountForResource,
+  getActiveApplicationsCountForRequirement,
+  getApplicationStatusMapping
 };
