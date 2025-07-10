@@ -477,6 +477,11 @@ const startWorkflowForApplication = async (applicationId, userType) => {
 // @route   PUT /api/applications/:id/status
 // @access  Private
 const updateApplicationStatus = asyncHandler(async (req, res, next) => {
+  console.log('🔧 ApplicationController: updateApplicationStatus called with:', {
+    applicationId: req.params.id,
+    body: req.body,
+    user: { id: req.user.id, userType: req.user.userType, organizationRole: req.user.organizationRole }
+  });
   const { 
     status, 
     notes, 
@@ -498,7 +503,7 @@ const updateApplicationStatus = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse(`Invalid status. Valid statuses are: ${validStatuses.join(', ')}`, 400));
   }
 
-  let application = await Application.findById(req.params.id);
+  let application = await Application.findById(req.params.id).select('+organizationId');
 
   if (!application) {
     return next(new ErrorResponse('Application not found', 404));
@@ -532,9 +537,14 @@ const updateApplicationStatus = asyncHandler(async (req, res, next) => {
   }
   // Client can update status in their process flow
   else if (isClient && isRequirementOwner) {
-    const clientAllowedStatuses = ['shortlisted', 'interview', 'accepted', 'offer_created', 'rejected'];
-    hasPermission = clientAllowedStatuses.includes(status) && 
-                   (currentStatus === 'applied' || clientAllowedStatuses.includes(currentStatus));
+    // When status is 'applied', client can only reject (admin must shortlist first)
+    if (currentStatus === 'applied') {
+      hasPermission = status === 'rejected';
+    } else {
+      // For other statuses, client can update to these statuses
+      const clientAllowedStatuses = ['shortlisted', 'interview', 'accepted', 'offer_created', 'rejected'];
+      hasPermission = clientAllowedStatuses.includes(status);
+    }
   }
   // Vendor can only revoke (withdraw) at any point
   else if (isVendor && (isResourceOwner || application.createdBy.toString() === req.user.id)) {
@@ -572,6 +582,7 @@ const updateApplicationStatus = asyncHandler(async (req, res, next) => {
       runValidators: true
     }
   )
+    .select('+organizationId')
     .populate('requirement', 'title status priority')
     .populate('resource', 'name status category')
     .populate('createdBy', 'firstName lastName email')
@@ -620,13 +631,18 @@ const updateApplicationStatus = asyncHandler(async (req, res, next) => {
     historyData.followUpNotes = followUpNotes;
   }
 
-  // Add organizationId for application history
-  if (req.user.organizationId) {
-    historyData.organizationId = req.user.organizationId;
-    console.log('🔧 ApplicationController: Adding organizationId to application history:', req.user.organizationId);
-  }
+  // Add organizationId for application history - use application's organizationId
+  historyData.organizationId = application.organizationId;
+  console.log('🔧 ApplicationController: Adding organizationId to application history:', application.organizationId);
+  console.log('🔧 ApplicationController: History data to be created:', JSON.stringify(historyData, null, 2));
 
-  await ApplicationHistory.create(historyData);
+  try {
+    const historyEntry = await ApplicationHistory.create(historyData);
+    console.log('✅ ApplicationController: History entry created successfully:', historyEntry._id);
+  } catch (error) {
+    console.error('❌ ApplicationController: Error creating history entry:', error);
+    // Don't fail the status update if history creation fails
+  }
 
   // Create notification for application creator
   await createNotification({
