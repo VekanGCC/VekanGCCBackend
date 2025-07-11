@@ -540,6 +540,9 @@ const updateApplicationStatus = asyncHandler(async (req, res, next) => {
     // When status is 'applied', client can only reject (admin must shortlist first)
     if (currentStatus === 'applied') {
       hasPermission = status === 'rejected';
+    } else if (currentStatus === 'offer_created') {
+      // When offer is created, client can only remove offer (withdraw)
+      hasPermission = status === 'withdrawn';
     } else {
       // For other statuses, client can update to these statuses
       const clientAllowedStatuses = ['shortlisted', 'interview', 'accepted', 'offer_created', 'rejected'];
