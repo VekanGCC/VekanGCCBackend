@@ -23,24 +23,14 @@ const calculateFileHash = async (filePath) => {
 // @route   POST /api/files/upload
 // @access  Private
 const uploadFile = asyncHandler(async (req, res, next) => {
-  console.log('🔧 FileController: Upload request received');
-  console.log('🔧 FileController: Request body:', req.body);
-  console.log('🔧 FileController: Request file:', req.file);
-  console.log('🔧 FileController: Request user:', req.user);
-
   if (!req.file) {
-    console.log('🔧 FileController: No file uploaded');
     return next(new ErrorResponse('No file uploaded', 400));
   }
 
   const { entityType, entityId, category, description, isPublic, tags } = req.body;
 
-  console.log('🔧 FileController: Entity type:', entityType);
-  console.log('🔧 FileController: Entity ID:', entityId);
-
   // Validate required fields
   if (!entityType || !entityId) {
-    console.log('🔧 FileController: Missing entity type or ID');
     return next(new ErrorResponse('Entity type and entity ID are required', 400));
   }
 
@@ -61,9 +51,6 @@ const uploadFile = asyncHandler(async (req, res, next) => {
     correctedMimeType = 'image/jpeg';
   }
 
-  console.log('🔧 FileController: Original MIME type:', req.file.mimetype);
-  console.log('🔧 FileController: Corrected MIME type:', correctedMimeType);
-
   // Create file record
   const fileData = {
     filename: req.file.filename,
@@ -81,16 +68,10 @@ const uploadFile = asyncHandler(async (req, res, next) => {
     tags: tags ? tags.split(',').map(tag => tag.trim()) : []
   };
 
-  console.log('🔧 FileController: File data to create:', fileData);
-
   const file = await File.create(fileData);
-
-  console.log('🔧 FileController: File created successfully:', file);
 
   // Populate uploader info
   await file.populate('uploadedBy', 'firstName lastName email');
-
-  console.log('🔧 FileController: Sending response');
 
   res.status(201).json(
     ApiResponse.success(file, 'File uploaded successfully')
@@ -254,27 +235,11 @@ const getFile = asyncHandler(async (req, res, next) => {
 // @route   GET /api/files/:id/download
 // @access  Private
 const downloadFile = asyncHandler(async (req, res, next) => {
-  console.log('🚨 DEBUG: Download function called!');
-  console.log('🚨 DEBUG: Request params:', req.params);
-  console.log('🚨 DEBUG: Request headers:', req.headers);
-  console.log('🔧 FileController: Download request received for file ID:', req.params.id);
-  
   const file = await File.findById(req.params.id);
 
   if (!file) {
-    console.log('🔧 FileController: File not found in database');
     return next(new ErrorResponse('File not found', 404));
   }
-
-  console.log('🔧 FileController: File found in database:', {
-    filename: file.filename,
-    originalName: file.originalName,
-    path: file.path,
-    size: file.size,
-    entityType: file.entityType,
-    entityId: file.entityId,
-    uploadedBy: file.uploadedBy
-  });
 
   // Enhanced permission check for cross-access
   let hasPermission = false;
@@ -325,11 +290,8 @@ const downloadFile = asyncHandler(async (req, res, next) => {
   }
 
   if (!hasPermission) {
-    console.log('🔧 FileController: Permission denied for user:', req.user.id, 'userType:', req.user.userType);
     return next(new ErrorResponse('Not authorized to download this file', 403));
   }
-
-  console.log('🔧 FileController: Permission granted for user:', req.user.id);
 
   // Build file path using the stored filename from database
   const path = require('path');
@@ -343,30 +305,21 @@ const downloadFile = asyncHandler(async (req, res, next) => {
     file.path // Use the stored path directly
   ];
 
-  console.log('🔧 FileController: Trying possible paths:', possiblePaths);
-
   let filePath = null;
   for (const testPath of possiblePaths) {
     if (fs.existsSync(testPath)) {
       filePath = testPath;
-      console.log('🔧 FileController: Found file at:', filePath);
       break;
     }
   }
 
   if (!filePath) {
-    console.log('🔧 FileController: File not found on disk at any location');
     return res.status(404).json({ message: "File not found on server" });
   }
 
   try {
     // Get file stats to verify it's a real file
     const stats = fs.statSync(filePath);
-    console.log('🔧 FileController: File stats:', {
-      size: stats.size,
-      isFile: stats.isFile(),
-      isDirectory: stats.isDirectory()
-    });
 
     if (!stats.isFile()) {
       return res.status(400).json({ message: "Path is not a file" });
@@ -376,8 +329,6 @@ const downloadFile = asyncHandler(async (req, res, next) => {
     res.setHeader("Content-Disposition", `attachment; filename="${file.originalName}"`);
     res.setHeader("Content-Type", file.mimetype || "application/octet-stream");
     res.setHeader("Content-Length", stats.size);
-
-    console.log('🔧 FileController: Sending file with size:', stats.size);
 
     // Create read stream and pipe to response
     const readStream = fs.createReadStream(filePath);
@@ -390,15 +341,11 @@ const downloadFile = asyncHandler(async (req, res, next) => {
     });
 
     readStream.on('end', () => {
-      console.log('🔧 FileController: Download completed successfully');
-      
       // Update download count
       try {
         file.downloadCount += 1;
         file.lastDownloadedAt = new Date();
-        file.save().then(() => {
-          console.log('🔧 FileController: Download count updated');
-        }).catch((err) => {
+        file.save().catch((err) => {
           console.error('🔧 FileController: Error updating download count:', err);
         });
       } catch (err) {
@@ -653,7 +600,6 @@ const testFileIntegrity = asyncHandler(async (req, res, next) => {
       ApiResponse.success(integrityInfo, 'File integrity check completed')
     );
   } catch (error) {
-    console.error('Error checking file integrity:', error);
     return next(new ErrorResponse('Error checking file integrity', 500));
   }
 });
@@ -662,8 +608,6 @@ const testFileIntegrity = asyncHandler(async (req, res, next) => {
 // @route   GET /api/files/:id/test-download
 // @access  Private
 const testDownload = asyncHandler(async (req, res, next) => {
-  console.log('🔧 FileController: Test download request for file ID:', req.params.id);
-  
   const file = await File.findById(req.params.id);
 
   if (!file) {
@@ -671,8 +615,6 @@ const testDownload = asyncHandler(async (req, res, next) => {
   }
 
   const absolutePath = path.resolve(file.path);
-  
-  console.log('🔧 FileController: Test download path:', absolutePath);
 
   try {
     // Simple file read and send
@@ -683,10 +625,7 @@ const testDownload = asyncHandler(async (req, res, next) => {
     res.setHeader('Content-Length', fileBuffer.length);
     
     res.send(fileBuffer);
-    
-    console.log('🔧 FileController: Test download completed');
   } catch (error) {
-    console.error('🔧 FileController: Test download error:', error);
     return next(new ErrorResponse('Test download failed', 500));
   }
 });
@@ -695,8 +634,6 @@ const testDownload = asyncHandler(async (req, res, next) => {
 // @route   GET /api/files/test-file
 // @access  Private
 const createTestFile = asyncHandler(async (req, res, next) => {
-  console.log('🔧 FileController: Creating test file...');
-  
   try {
     // Create a simple test file
     const testContent = 'This is a test file for debugging download issues.\n\nIf you can download this file successfully, the download mechanism is working.\n\nTimestamp: ' + new Date().toISOString();
@@ -707,10 +644,7 @@ const createTestFile = asyncHandler(async (req, res, next) => {
     res.setHeader('Content-Length', testBuffer.length);
     
     res.send(testBuffer);
-    
-    console.log('🔧 FileController: Test file sent successfully');
   } catch (error) {
-    console.error('🔧 FileController: Test file error:', error);
     return next(new ErrorResponse('Test file creation failed', 500));
   }
 });
@@ -719,8 +653,6 @@ const createTestFile = asyncHandler(async (req, res, next) => {
 // @route   GET /api/files/:id/direct
 // @access  Private
 const directFileServe = asyncHandler(async (req, res, next) => {
-  console.log('🔧 FileController: Direct file serve test for file ID:', req.params.id);
-  
   const file = await File.findById(req.params.id);
 
   if (!file) {
@@ -728,20 +660,15 @@ const directFileServe = asyncHandler(async (req, res, next) => {
   }
 
   const absolutePath = path.resolve(file.path).replace(/\\/g, '/');
-  
-  console.log('🔧 FileController: Direct serve path:', absolutePath);
 
   try {
     // Use Express's built-in sendFile method
     res.sendFile(absolutePath, (err) => {
       if (err) {
-        console.error('🔧 FileController: Direct serve error:', err);
         return next(new ErrorResponse('Direct serve failed', 500));
       }
-      console.log('🔧 FileController: Direct serve completed');
     });
   } catch (error) {
-    console.error('🔧 FileController: Direct serve error:', error);
     return next(new ErrorResponse('Direct serve failed', 500));
   }
 });
@@ -750,12 +677,9 @@ const directFileServe = asyncHandler(async (req, res, next) => {
 // @route   GET /api/files/:id/simple-download
 // @access  Private
 const simpleDownload = asyncHandler(async (req, res, next) => {
-  console.log('🔧 FileController: Simple download request for file ID:', req.params.id);
-  
   const file = await File.findById(req.params.id);
 
   if (!file) {
-    console.log('🔧 FileController: File not found');
     return next(new ErrorResponse('File not found', 404));
   }
 
@@ -808,22 +732,16 @@ const simpleDownload = asyncHandler(async (req, res, next) => {
   }
 
   if (!hasPermission) {
-    console.log('🔧 FileController: Permission denied for user:', req.user.id, 'userType:', req.user.userType);
     return next(new ErrorResponse('Not authorized to download this file', 403));
   }
-
-  console.log('🔧 FileController: Permission granted for user:', req.user.id);
 
   // Build file path
   const path = require('path');
   let filePath = path.join(__dirname, '../uploads', file.filename);
-  
-  console.log('🔧 FileController: Simple download path:', filePath);
 
   // Check if file exists
   const fs = require('fs');
   if (!fs.existsSync(filePath)) {
-    console.log('🔧 FileController: File not found on disk:', filePath);
     return res.status(404).json({ message: "File not found" });
   }
 
@@ -832,24 +750,17 @@ const simpleDownload = asyncHandler(async (req, res, next) => {
     res.setHeader("Content-Disposition", `attachment; filename=${file.originalName}`);
     res.setHeader("Content-Type", "application/octet-stream");
 
-    console.log('🔧 FileController: Sending file with simple method...');
-
     // Send the file using the working approach
     res.sendFile(filePath, (err) => {
       if (err) {
-        console.error('🔧 FileController: Simple download error:', err);
         return next(new ErrorResponse('Error serving file', 500));
       }
-      
-      console.log('🔧 FileController: Simple download completed successfully');
       
       // Update download count
       try {
         file.downloadCount += 1;
         file.lastDownloadedAt = new Date();
-        file.save().then(() => {
-          console.log('🔧 FileController: Download count updated');
-        }).catch((err) => {
+        file.save().catch((err) => {
           console.error('🔧 FileController: Error updating download count:', err);
         });
       } catch (err) {
@@ -858,7 +769,6 @@ const simpleDownload = asyncHandler(async (req, res, next) => {
     });
 
   } catch (error) {
-    console.error('🔧 FileController: Simple download error:', error);
     return next(new ErrorResponse('Internal server error', 500));
   }
 });

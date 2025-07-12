@@ -346,9 +346,6 @@ const verifyOTP = asyncHandler(async (req, res, next) => {
 
 const saveStep = asyncHandler(async (req, res, next) => {
   const { step, data } = req.body;
-  console.log('Received request body:', req.body);
-  console.log('Step:', step);
-  console.log('Data:', data);
 
   let user;
   if (step === 1) {
@@ -422,9 +419,6 @@ const saveStep = asyncHandler(async (req, res, next) => {
       return next(new ErrorResponse('User not found', 404));
     }
 
-    console.log('user console', user);
-    console.log('otp console', otp);
-    console.log('user.otp console', user.otp);
     // Verify OTP
     if (!user.otp || user.otp !== otp) {
       return next(new ErrorResponse('No OTP found. Please request a new OTP.', 400));
@@ -458,31 +452,19 @@ const saveStep = asyncHandler(async (req, res, next) => {
       return next(new ErrorResponse('User not found', 404));
     }
 
-    console.log('user console', user);
-    console.log('data console', data);
-    console.log('step console', step);
-
     // Update user data based on step
     switch (step) {
       case 3:
         // Address and Payment Terms
-        console.log('Client Step 3 - Received data:', data);
-        console.log('Client Step 3 - Address data:', data.address);
-        console.log('Client Step 3 - Payment terms:', data.paymentTerms);
-        
-        const addressResult = await UserAddress.findOneAndUpdate(
+        await UserAddress.findOneAndUpdate(
           { userId: user._id },
           { ...data.address, userId: user._id },
           { upsert: true, new: true }
         );
-        console.log('Client Step 3 - Address saved:', addressResult);
         
         // Save payment terms directly to User model
         if (data.paymentTerms) {
           user.paymentTerms = data.paymentTerms;
-          console.log('Client Step 3 - Payment terms saved to User model:', data.paymentTerms);
-        } else {
-          console.log('Client Step 3 - No payment terms found in data');
         }
         break;
       case 4:
@@ -507,19 +489,7 @@ const saveStep = asyncHandler(async (req, res, next) => {
     }
 
     user.registrationStep = Math.max(user.registrationStep, step);
-    console.log('Client Step 3 - User before save:', {
-      id: user._id,
-      email: user.email,
-      paymentTerms: user.paymentTerms,
-      registrationStep: user.registrationStep
-    });
     await user.save();
-    console.log('Client Step 3 - User after save:', {
-      id: user._id,
-      email: user.email,
-      paymentTerms: user.paymentTerms,
-      registrationStep: user.registrationStep
-    });
 
     res.status(200).json({
       success: true,
@@ -560,15 +530,11 @@ const getClientRequirements = asyncHandler(async (req, res, next) => {
   }
 
   if (search) {
-    console.log('🔧 Backend ClientController: Searching for term:', search);
-    
     // First, try to find skills by name that match the search term
     const AdminSkill = require('../models/AdminSkill');
     const matchingSkills = await AdminSkill.find({
       name: { $regex: search, $options: 'i' }
     }).select('_id name');
-    
-    console.log('🔧 Backend ClientController: Found matching skills:', matchingSkills);
     
     const skillIds = matchingSkills.map(skill => skill._id);
     
@@ -581,10 +547,7 @@ const getClientRequirements = asyncHandler(async (req, res, next) => {
     // If we found matching skills, also search in skills field
     if (skillIds.length > 0) {
       query.$or.push({ skills: { $in: skillIds } });
-      console.log('🔧 Backend ClientController: Added skills search with IDs:', skillIds);
     }
-    
-    console.log('🔧 Backend ClientController: Final search query:', JSON.stringify(query, null, 2));
   }
 
   if (status) {

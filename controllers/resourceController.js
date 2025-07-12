@@ -24,21 +24,15 @@ const getResources = asyncHandler(async (req, res, next) => {
     requirementId
   } = req.query;
 
-  console.log('🔧 ResourceController: Query parameters received:', req.query);
-
   // Build query
   let query = {};
 
   if (search) {
-    console.log('🔧 Backend ResourceController: Searching for term:', search);
-    
     // First, try to find skills by name that match the search term
     const AdminSkill = require('../models/AdminSkill');
     const matchingSkills = await AdminSkill.find({
       name: { $regex: search, $options: 'i' }
     }).select('_id name');
-    
-    console.log('🔧 Backend ResourceController: Found matching skills:', matchingSkills);
     
     const skillIds = matchingSkills.map(skill => skill._id);
     
@@ -51,10 +45,7 @@ const getResources = asyncHandler(async (req, res, next) => {
     // If we found matching skills, also search in skills field
     if (skillIds.length > 0) {
       query.$or.push({ skills: { $in: skillIds } });
-      console.log('🔧 Backend ResourceController: Added skills search with IDs:', skillIds);
     }
-    
-    console.log('🔧 Backend ResourceController: Final search query:', JSON.stringify(query, null, 2));
   }
 
   if (status) {
@@ -107,8 +98,6 @@ const getResources = asyncHandler(async (req, res, next) => {
 
   // Filter by requirement matching
   if (requirementId) {
-    console.log('🔧 ResourceController: Filtering resources for requirement:', requirementId);
-    
     // Get the requirement to extract matching criteria
     const Requirement = require('../models/Requirement');
     const requirement = await Requirement.findById(requirementId)
@@ -144,18 +133,13 @@ const getResources = asyncHandler(async (req, res, next) => {
 
       // 6. Resource should be available
       query['availability.status'] = { $in: ['available', 'partially_available'] };
-
-      console.log('🔧 ResourceController: Requirement matching criteria applied');
     } else {
-      console.log('🔧 ResourceController: Requirement not found, returning empty result');
       query._id = { $in: [] }; // Return no results if requirement not found
     }
   }
 
   // Filter by approved vendors only
   if (approvedVendorsOnly === 'true') {
-    console.log('🔧 ResourceController: Filtering for approved vendors only');
-    
     // Get the VendorSkill and AdminSkill models
     const VendorSkill = require('../models/VendorSkill');
     const AdminSkill = require('../models/AdminSkill');
@@ -167,7 +151,6 @@ const getResources = asyncHandler(async (req, res, next) => {
       
       if (validSkillIds.length > 0) {
         const skillLogic = req.query.skillLogic || 'OR';
-        console.log('🔧 ResourceController: Filtering by skill IDs:', validSkillIds, 'with logic:', skillLogic);
         
         // Get approved vendor skills that match the selected skill IDs
         let approvedVendorSkillsQuery = {
@@ -176,7 +159,6 @@ const getResources = asyncHandler(async (req, res, next) => {
         };
         
         const approvedVendorSkills = await VendorSkill.find(approvedVendorSkillsQuery);
-        console.log('🔧 ResourceController: Found', approvedVendorSkills.length, 'approved vendor skills');
         
         if (approvedVendorSkills.length > 0) {
           // Group by vendor and check logic
@@ -201,8 +183,6 @@ const getResources = asyncHandler(async (req, res, next) => {
             approvedVendors = Object.keys(vendorSkillMap);
           }
           
-          console.log('🔧 ResourceController: Found', approvedVendors.length, 'approved vendors with matching skills');
-          
           if (approvedVendors.length > 0) {
             query.createdBy = { $in: approvedVendors };
           } else {
@@ -220,7 +200,6 @@ const getResources = asyncHandler(async (req, res, next) => {
     } else {
       // No skills selected, get all vendors with any approved skills
       const approvedVendors = await VendorSkill.distinct('vendor', { status: 'approved' });
-      console.log('🔧 ResourceController: Found', approvedVendors.length, 'approved vendors (no skill filter)');
       
       if (approvedVendors.length > 0) {
         query.createdBy = { $in: approvedVendors };
@@ -230,15 +209,10 @@ const getResources = asyncHandler(async (req, res, next) => {
     }
   }
 
-  console.log('🔧 ResourceController: Final query:', JSON.stringify(query, null, 2));
-
   // Only return resources for the logged-in vendor
   if (req.user && req.user.userType === 'vendor') {
-    console.log('🔧 ResourceController: User is vendor, filtering by organization ID:', req.user.organizationId);
-    
     // If approvedVendorsOnly is true, we need to check if this vendor is approved
     if (approvedVendorsOnly === 'true') {
-      console.log('🔧 ResourceController: Approved vendors only filter is active for vendor');
       const VendorSkill = require('../models/VendorSkill');
       const AdminSkill = require('../models/AdminSkill');
       
@@ -315,8 +289,6 @@ const getResources = asyncHandler(async (req, res, next) => {
 
   const total = await Resource.countDocuments(query);
 
-  console.log('🔧 ResourceController: Found', resources.length, 'resources out of', total, 'total');
-
   res.status(200).json(
     ApiResponse.success(
       resources,
@@ -359,7 +331,6 @@ const createResource = asyncHandler(async (req, res, next) => {
   // Add organizationId for vendor resources
   if (req.user.userType === 'vendor' && req.user.organizationId) {
     req.body.organizationId = req.user.organizationId;
-    console.log('🔧 ResourceController: Adding organizationId to resource:', req.user.organizationId);
   }
 
   // Ensure skills is an array and convert string IDs to ObjectIds
@@ -376,12 +347,7 @@ const createResource = asyncHandler(async (req, res, next) => {
     delete req.body.skill;
   }
 
-  console.log('🔧 ResourceController: Creating resource with data:', JSON.stringify(req.body, null, 2));
-  console.log('🔧 ResourceController: Skills array:', req.body.skills);
-
   const resource = await Resource.create(req.body);
-
-  console.log('🔧 ResourceController: Created resource:', JSON.stringify(resource, null, 2));
 
   res.status(201).json(
     ApiResponse.success(resource, 'Resource created successfully')
@@ -444,8 +410,6 @@ const deleteResource = asyncHandler(async (req, res, next) => {
 // @access  Private
 const getMatchingRequirementsCount = asyncHandler(async (req, res, next) => {
   const resourceId = req.params.id;
-  
-  console.log('🔧 ResourceController: Getting matching requirements count for resource:', resourceId);
 
   // Get the resource
   const resource = await Resource.findById(resourceId)
@@ -500,7 +464,6 @@ const getMatchingRequirementsCount = asyncHandler(async (req, res, next) => {
   });
 
   const matchingCount = filteredRequirements.length;
-  console.log('🔧 ResourceController: Found', matchingCount, 'matching requirements (strict skill match)');
 
   res.status(200).json(
     ApiResponse.success({
@@ -515,8 +478,6 @@ const getMatchingRequirementsCount = asyncHandler(async (req, res, next) => {
 // @access  Private
 const getMatchingRequirementsCountsBatch = asyncHandler(async (req, res, next) => {
   const { resourceIds } = req.body;
-  
-  console.log('🔧 ResourceController: Getting matching requirements counts for resources:', resourceIds);
 
   if (!resourceIds || !Array.isArray(resourceIds)) {
     return next(new ErrorResponse('Resource IDs array is required', 400));
@@ -576,8 +537,6 @@ const getMatchingRequirementsCountsBatch = asyncHandler(async (req, res, next) =
       // 🔴 Count the matches
       const matchingCount = matchingRequirements.length;
 
-      console.log('🔧 ResourceController: Found', matchingCount, 'matching requirements for resource:', resourceId);
-
       results.push({
         resourceId,
         count: matchingCount
@@ -592,8 +551,6 @@ const getMatchingRequirementsCountsBatch = asyncHandler(async (req, res, next) =
       });
     }
   }
-
-  console.log('🔧 ResourceController: Batch results:', results);
 
   res.status(200).json(
     ApiResponse.success(results, 'Matching requirements counts retrieved successfully')
@@ -610,13 +567,6 @@ const getMatchingRequirementsDetails = asyncHandler(async (req, res, next) => {
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
   const skip = (page - 1) * limit;
-  
-  console.log('🔧 ResourceController: Getting matching requirements details for resource:', resourceId, 'page:', page, 'limit:', limit);
-  console.log('🔧 ResourceController: User info:', {
-    userType: req.user.userType,
-    userId: req.user.id,
-    organizationId: req.user.organizationId
-  });
 
   // Get the resource
   const resource = await Resource.findById(resourceId)
@@ -627,28 +577,12 @@ const getMatchingRequirementsDetails = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse('Resource not found', 404));
   }
 
-  console.log('🔧 ResourceController: Found resource:', {
-    _id: resource._id,
-    name: resource.name,
-    createdBy: resource.createdBy,
-    organizationId: resource.organizationId
-  });
-
   // Verify the resource belongs to the vendor
   // Check if user created the resource OR if it belongs to their organization
   const isOwner = resource.createdBy.toString() === req.user.id;
   const isOrganizationMember = resource.organizationId && 
                               req.user.organizationId && 
                               resource.organizationId.toString() === req.user.organizationId.toString();
-  
-  console.log('🔧 ResourceController: Authorization check:', {
-    isOwner,
-    isOrganizationMember,
-    resourceCreatedBy: resource.createdBy.toString(),
-    currentUserId: req.user.id,
-    resourceOrgId: resource.organizationId?.toString(),
-    userOrgId: req.user.organizationId?.toString()
-  });
 
   if (!isOwner && !isOrganizationMember) {
     return next(new ErrorResponse('Access denied - You can only view matching requirements for your own resources or resources in your organization', 403));
@@ -682,8 +616,6 @@ const getMatchingRequirementsDetails = asyncHandler(async (req, res, next) => {
     .populate('organizationId', 'name')
     .lean();
 
-  console.log('🔧 ResourceController: Initial query returned', possibleRequirements.length, 'requirements');
-
   // 🔴 Convert resource skills to string format for comparison (same as batch)
   const resourceSkillIds = resource.skills.map(skill => skill._id.toString());
 
@@ -692,8 +624,6 @@ const getMatchingRequirementsDetails = asyncHandler(async (req, res, next) => {
     const requirementSkillIds = requirement.skills.map(skill => skill._id.toString());
     return requirementSkillIds.every(skillId => resourceSkillIds.includes(skillId));
   });
-
-  console.log('🔧 ResourceController: After skills filtering:', matchingRequirements.length, 'requirements');
 
   // Calculate match percentage for each requirement
   const requirementsWithMatchPercentage = matchingRequirements.map(requirement => {
@@ -733,15 +663,6 @@ const getMatchingRequirementsDetails = asyncHandler(async (req, res, next) => {
   const totalCount = requirementsWithMatchPercentage.length;
   const paginatedRequirements = requirementsWithMatchPercentage.slice(skip, skip + limit);
   const totalPages = Math.ceil(totalCount / limit);
-
-  console.log('🔧 ResourceController: Pagination info:', {
-    totalCount,
-    page,
-    limit,
-    skip,
-    totalPages,
-    returnedCount: paginatedRequirements.length
-  });
 
   res.status(200).json(
     ApiResponse.success({
